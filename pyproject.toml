@@ -1,9 +1,9 @@
 [project]
-name = "fineweb-vi-llm"
+name = "fineweb_vi_llm"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     "datasets>=4.0.0",
     "huggingface-hub>=0.34.4",
