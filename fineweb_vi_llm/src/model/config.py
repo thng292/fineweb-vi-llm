@@ -34,7 +34,7 @@ class FinewebViConfig(PretrainedConfig):
         attention_bias=False,
         attention_dropout=0.0,
         query_pre_attn_scalar=256,
-        sliding_window=4096,
+        sliding_window=512,
         layer_types: Optional[list[str]] = None,
         final_logit_softcapping=None,
         attn_logit_softcapping=None,
