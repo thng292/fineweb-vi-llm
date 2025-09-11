@@ -1,6 +1,7 @@
 from ..tokenizer import FinewebViTokenizer
 from ..model.dese import FinewebViForCausalLM, FinewebViConfig
 
+import math
 import typer
 import torch
 import datasets
@@ -8,7 +9,7 @@ from typing import Any
 from dataclasses import dataclass
 from accelerate import init_empty_weights, init_on_device, PartialState
 from transformers import Trainer, TrainingArguments, PreTrainedTokenizerBase
-from dion import Muon
+from dion import Dion, DionMixedPrecisionConfig
 
 partial_state = PartialState()
 
@@ -33,7 +34,7 @@ class Log:
 
 
 @dataclass
-class CustomDataCollator:
+class PadTokenizedDataCollator:
     tokenizer: PreTrainedTokenizerBase
     sequence_len: int
 
@@ -41,47 +42,24 @@ class CustomDataCollator:
         self, features: list[dict[str, Any]], return_tensors=None
     ) -> dict[str, Any]:
         first = features[0]
+        pad_lens = [self.sequence_len - len(f["input_ids"]) for f in features]
         batch = {}
-
-        # Special handling for labels.
-        # Ensure that tensor is created with the correct type
-        # (it should be automatically the case, but let's make sure of it.)
-        if "label" in first and first["label"] is not None:
-            label = (
-                first["label"].item()
-                if isinstance(first["label"], torch.Tensor)
-                else first["label"]
-            )
-            dtype = torch.long if isinstance(label, int) else torch.float
-            batch["labels"] = torch.tensor([f["label"] for f in features], dtype=dtype)
-        elif "label_ids" in first and first["label_ids"] is not None:
-            if isinstance(first["label_ids"], torch.Tensor):
-                batch["labels"] = torch.stack([f["label_ids"] for f in features])
-            else:
-                dtype = (
-                    torch.long
-                    if isinstance(first["label_ids"][0], int)
-                    else torch.float
-                )
-                batch["labels"] = torch.tensor(
-                    [f["label_ids"] for f in features], dtype=dtype
-                )
-
-        # Handling of all other possible keys.
-        # Again, we will use the first element to figure out which key/values are not None for this model.
-        for k, v in first.items():
-            if (
-                k not in ("label", "label_ids")
-                and v is not None
-                and not isinstance(v, str)
-            ):
-                if isinstance(v, torch.Tensor):
-                    batch[k] = torch.stack([f[k] for f in features])
-                elif isinstance(v, np.ndarray):
-                    batch[k] = torch.from_numpy(np.stack([f[k] for f in features]))
-                else:
-                    batch[k] = torch.tensor([f[k] for f in features])
-
+        batch["input_ids"] = torch.tensor(
+            [
+                f["input_ids"] + [self.tokenizer.pad_token_id] * pad_len
+                for pad_len, f in zip(pad_lens, features)
+            ],
+        )
+        batch["labels"] = torch.tensor(
+            [
+                f["input_ids"] + [-100] * pad_len
+                for pad_len, f in zip(pad_lens, features)
+            ],
+            dtype=torch.long,
+        )
+        batch["attention_masks"] = torch.tensor(
+            [f["input_ids"] + [0] * pad_len for pad_len, f in zip(pad_lens, features)],
+        )
         return batch
 
 
@@ -93,9 +71,17 @@ def main(
     checkpoint_step: int | float = 0.1,
     eval_step: int | float = 0.1,
     batch_size_per_device: int = 1,
+    eval_batch_size_per_device: int = 1,
     gradient_accumulation: int = 1,
-    epocs: int = 1,
-    dtype: str = "float32",
+    epochs: int = 1,
+    train_bfloat16: bool = False,
+    train_float16: bool = False,
+    learning_rate: float = 0.01,
+    dion_rank_frac: float = 1,  # 1 is full, 0.5 is half, ...
+    neftune_noise_alpha: float = 5,
+    push_to_hub: bool = True,
+    hub_model_id: str = "FineWebVi",
+    hub_private: bool = True,
     # Model config
     hidden_size: int = 960,
     intermediate_size: int = 1920,
@@ -114,7 +100,7 @@ def main(
 ):
     Log.stat("Run", run_name)
     Log.stat("Checkpoint dir", checkpoint_dir)
-    Log.stat("Num Epochs", epocs)
+    Log.stat("Num Epochs", epochs)
     Log.stat(
         f"Global batch size: {batch_size_per_device * partial_state.num_processes * gradient_accumulation} sequences"
     )
@@ -149,6 +135,40 @@ def main(
     Log.done("Init model")
     num_params = sum(p.numel() for p in model.parameters())
     Log.stat("Num params", num_params)
+    optimizer_param_groups = [
+        dict(params=list(model.model.layers.parameters())),
+        dict(
+            params=list(model.get_input_embeddings().parameters()),
+            algorithm="lion",
+            lr=learning_rate,  # no LR adjustment for embedding parameters
+            betas=(0.95, 0.98),
+            weight_decay=0,  # no weight decay for embedding parameters
+        ),
+        dict(
+            params=list(model.lm_heads.parameters()),
+            algorithm="lion",
+            lr=learning_rate
+            / math.sqrt(model.config.hidden_size),  # scale LR for lm_head
+            betas=(0.95, 0.98),
+            weight_decay=0,  # no weight decay for lm_head parameters
+        ),
+    ]
+    optimizer_args = dict(
+        params=optimizer_param_groups,
+        rank_fraction=dion_rank_frac,
+        lr=learning_rate,
+        mu=0.95,
+        weight_decay=0,
+        mixed_precision_config=(
+            DionMixedPrecisionConfig(
+                momentum_dtype=torch.bfloat16 if train_bfloat16 else torch.float16,
+                variance_dtype=torch.bfloat16 if train_bfloat16 else torch.float16,
+                Q_dtype=torch.bfloat16 if train_bfloat16 else torch.float16,
+            )
+            if train_bfloat16 or train_float16
+            else None
+        ),
+    )
 
     data = datasets.load_dataset(
         tokenized_data_uri,
@@ -157,12 +177,38 @@ def main(
 
     trainer = Trainer(
         model=model,
-        data_collator=None,
+        data_collator=PadTokenizedDataCollator(tokenizer, max_position_embeddings),
         train_dataset=data["train"],
         eval_dataset=data["test"],
-        compute_loss_func=None,  # Need this for multi-head loss, just return model's returned loss
-        args=TrainingArguments(),
+        optimizer_cls_and_kwargs=(
+            Dion,
+            optimizer_args,
+        ),
+        processing_class=tokenizer,
+        args=TrainingArguments(
+            run_name=run_name,
+            output_dir=checkpoint_dir,
+            # overwrite_output_dir=True,
+            per_device_train_batch_size=batch_size_per_device,
+            per_device_eval_batch_size=eval_batch_size_per_device,
+            gradient_accumulation_steps=gradient_accumulation,
+            gradient_checkpointing=True,
+            eval_strategy="step",
+            eval_steps=eval_step,
+            save_steps=checkpoint_step,
+            learning_rate=learning_rate,
+            num_train_epochs=epochs,
+            neftune_noise_alpha=neftune_noise_alpha,
+            logging_steps=1,
+            bf16=train_bfloat16,
+            fp16=train_float16,
+            push_to_hub=push_to_hub,
+            hub_model_id=hub_model_id,
+            hub_private_repo=hub_private,
+            report_to="tensorboard",
+        ),
     )
+    trainer.model_accepts_loss_kwargs = False
 
     Log.init("Training")
     trainer.train()

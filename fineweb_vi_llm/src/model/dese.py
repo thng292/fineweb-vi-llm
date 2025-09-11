@@ -51,28 +51,30 @@ class ScaledWordEmbedding(nn.Embedding):
 
 
 class TieWordEmbeddingLMHead(nn.Module):
+
     def __init__(self, embedding: nn.Embedding, bias=True) -> None:
         super().__init__()
-        self.embedding = embedding
+        # Store embedding as a plain attribute, not as a submodule
+        self._embedding_ref = embedding
         if bias:
             self.bias = (
                 nn.Parameter(torch.zeros(embedding.num_embeddings))
-                .to(self.embedding.weight.dtype)
-                .to(self.embedding.weight.device)
+                .to(embedding.weight.dtype)
+                .to(embedding.weight.device)
             )
         else:
             self.register_parameter("bias", None)
 
     def forward(self, hidden_states: torch.Tensor):
         # Project hidden states to vocabulary logits using tied embedding weights
-        logits = torch.matmul(hidden_states, self.embedding.weight.t())
+        logits = torch.matmul(hidden_states, self._embedding_ref.weight.t())
         if self.bias is not None:
             logits = logits + self.bias
         return logits
 
     @property
     def weight(self):
-        return self.embedding.weight
+        return self._embedding_ref.weight
 
 
 def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
