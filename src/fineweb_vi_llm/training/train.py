@@ -193,7 +193,7 @@ def main(
             per_device_eval_batch_size=eval_batch_size_per_device,
             gradient_accumulation_steps=gradient_accumulation,
             gradient_checkpointing=True,
-            eval_strategy="step",
+            eval_strategy="steps",
             eval_steps=eval_step,
             save_steps=checkpoint_step,
             learning_rate=learning_rate,
