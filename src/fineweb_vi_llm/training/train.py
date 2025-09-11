@@ -73,7 +73,7 @@ def main(
     batch_size_per_device: int = 1,
     eval_batch_size_per_device: int = 1,
     gradient_accumulation: int = 1,
-    epochs: int = 1,
+    epochs: float = 1,
     train_bfloat16: bool = False,
     train_float16: bool = False,
     learning_rate: float = 0.01,
