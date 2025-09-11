@@ -130,8 +130,8 @@ def main(
     )
     Log.init("Init model")
     with init_on_device(partial_state.device):
-        with init_empty_weights():
-            model = FinewebViForCausalLM(config)
+        #     with init_empty_weights():
+        model = FinewebViForCausalLM(config)
     Log.done("Init model")
     num_params = sum(p.numel() for p in model.parameters())
     Log.stat("Num params", num_params)
