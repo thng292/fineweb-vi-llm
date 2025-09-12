@@ -169,6 +169,9 @@ def main(
         sliding_window_pattern=sliding_window_pattern,
         num_lm_head=num_lm_head,
         use_cache=False,
+        pad_token_id=tokenizer.pad_token_id,
+        bos_token_id=tokenizer.bos_token_id,
+        eos_token_id=tokenizer.eos_token_id,
     )
     Log.init("Init model")
     with init_on_device("cpu" if train_cpu else partial_state.device):
