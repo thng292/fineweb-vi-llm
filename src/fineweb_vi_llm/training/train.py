@@ -4,6 +4,7 @@ from ..model.dese import FinewebViForCausalLM, FinewebViConfig
 import math
 import typer
 import torch
+from torch import nn
 import datasets
 from typing import Any
 from dataclasses import dataclass
@@ -32,6 +33,45 @@ class Log:
     @staticmethod
     def done(*to_print):
         print0("[DONE]", *to_print)
+
+
+def construct_optimizer_param_group(
+    model: FinewebViForCausalLM, learning_rate: float
+) -> list[list[nn.Parameter]]:
+    res = [  # some parameters appear in more than one parameter group
+        dict(params=[]),  # 2D params
+        dict(
+            params=list(model.get_input_embeddings().parameters()),
+            algorithm="lion",
+            lr=learning_rate,  # no LR adjustment for embedding parameters
+            betas=(0.95, 0.98),
+            weight_decay=0,  # no weight decay for embedding parameters
+        ),
+        dict(
+            params=list(model.lm_heads.parameters()),
+            algorithm="lion",
+            lr=learning_rate
+            / math.sqrt(model.config.hidden_size),  # scale LR for lm_head
+            betas=(0.95, 0.98),
+            weight_decay=0,  # no weight decay for lm_head parameters
+        ),
+        dict(
+            params=[],  # Other params
+            algorithm="lion",
+        ),
+    ]
+    for name, param in model.named_parameters():
+        if "embedding" in name:
+            continue
+        if "lm_head" in name:
+            continue
+
+        if param.ndim == 2:
+            res[0]["params"].append(param)
+        else:
+            res[3]["params"].append(param)
+
+    return res
 
 
 @dataclass
@@ -138,26 +178,7 @@ def main(
     num_params = sum(p.numel() for p in model.parameters())
     Log.stat("Num params", num_params)
 
-    optimizer_param_groups = (
-        [  # some parameters appear in more than one parameter group
-            dict(params=list(model.model.layers.parameters())),
-            dict(
-                params=list(model.get_input_embeddings().parameters()),
-                algorithm="lion",
-                lr=learning_rate,  # no LR adjustment for embedding parameters
-                betas=(0.95, 0.98),
-                weight_decay=0,  # no weight decay for embedding parameters
-            ),
-            dict(
-                params=list(model.lm_heads.parameters()),
-                algorithm="lion",
-                lr=learning_rate
-                / math.sqrt(model.config.hidden_size),  # scale LR for lm_head
-                betas=(0.95, 0.98),
-                weight_decay=0,  # no weight decay for lm_head parameters
-            ),
-        ]
-    )
+    optimizer_param_groups = construct_optimizer_param_group(model, learning_rate)
     optimizer_args = dict(
         params=optimizer_param_groups,
         rank_fraction=dion_rank_frac,

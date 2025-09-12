@@ -261,10 +261,10 @@ class Attention(nn.Module):
             )
 
         attention_interface = eager_attention_forward
-        if self.config._attn_implementation != "eager":
-            attention_interface = ALL_ATTENTION_FUNCTIONS[
-                self.config._attn_implementation
-            ]
+        # if self.config._attn_implementation != "eager":
+        #     attention_interface = ALL_ATTENTION_FUNCTIONS[
+        #         self.config._attn_implementation
+        #     ]
 
         attn_output, attn_weights = attention_interface(
             self,
@@ -400,7 +400,7 @@ class FinewebViModel(FinewebViPretrainedModel):
         )
         self.norm = LigerRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.rotary_emb = RotaryEmbedding(config)
-        self.gradient_checkpointing = False
+        # self.gradient_checkpointing = False
 
         config = copy.deepcopy(config)
         config.rope_theta = config.rope_local_base_freq
@@ -589,11 +589,11 @@ class FinewebViForCausalLM(FinewebViPretrainedModel, GenerationMixin):
         skip_logits: Optional[bool] = None,
         **loss_kwargs,
     ) -> Union[tuple, CausalLMOutputWithPast]:
-        if self.training and self.config._attn_implementation != "eager":
-            print(
-                "It is strongly recommended to train Gemma3 models with the `eager` attention implementation "
-                f"instead of `{self.config._attn_implementation}`. Use `eager` with `AutoModelForCausalLM.from_pretrained('<path-to-checkpoint>', attn_implementation='eager')`."
-            )
+        # if self.training and self.config._attn_implementation != "eager":
+        #     print(
+        #         "It is strongly recommended to train Gemma3 models with the `eager` attention implementation "
+        #         f"instead of `{self.config._attn_implementation}`. Use `eager` with `AutoModelForCausalLM.from_pretrained('<path-to-checkpoint>', attn_implementation='eager')`."
+        #     )
         output_attentions = (
             output_attentions
             if output_attentions is not None
