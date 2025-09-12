@@ -385,6 +385,7 @@ class FinewebViModel(FinewebViPretrainedModel):
         self.padding_idx = config.pad_token_id
         assert self.padding_idx is not None
         self.vocab_size = config.vocab_size
+        self.gradient_checkpointing = True
 
         self.embed_tokens = ScaledWordEmbedding(
             config.vocab_size,

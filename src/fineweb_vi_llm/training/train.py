@@ -61,7 +61,7 @@ def construct_optimizer_param_group(
         ),
     ]
     for name, param in model.named_parameters():
-        if "embedding" in name:
+        if "embed" in name:
             continue
         if "lm_head" in name:
             continue
