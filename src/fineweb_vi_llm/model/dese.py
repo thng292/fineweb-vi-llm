@@ -21,6 +21,8 @@ from transformers.masking_utils import (
 )
 from torch import nn
 import torch
+import math
+import weakref
 from liger_kernel.ops.softmax import LigerSoftmaxFunction
 from liger_kernel.transformers.model.loss_utils import LigerForCausalLMLoss
 from liger_kernel.transformers import (
@@ -54,8 +56,8 @@ class TieWordEmbeddingLMHead(nn.Module):
 
     def __init__(self, embedding: nn.Embedding, bias=True) -> None:
         super().__init__()
-        # Store embedding as a plain attribute, not as a submodule
-        self._embedding_ref = embedding
+        # Store a weakref to the embedding to avoid registration as submodule
+        self._embedding_ref = weakref.ref(embedding)
         if bias:
             self.bias = (
                 nn.Parameter(torch.zeros(embedding.num_embeddings))
@@ -67,14 +69,16 @@ class TieWordEmbeddingLMHead(nn.Module):
 
     def forward(self, hidden_states: torch.Tensor):
         # Project hidden states to vocabulary logits using tied embedding weights
-        logits = torch.matmul(hidden_states, self._embedding_ref.weight.t())
+        embedding = self._embedding_ref()
+        logits = torch.matmul(hidden_states, embedding.weight.t())
         if self.bias is not None:
             logits = logits + self.bias
         return logits
 
     @property
     def weight(self):
-        return self._embedding_ref.weight
+        embedding = self._embedding_ref()
+        return embedding.weight
 
 
 def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
@@ -674,3 +678,19 @@ class FinewebViForCausalLM(FinewebViPretrainedModel, GenerationMixin):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+
+    def init_weights(self):
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            torch.nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=1.0)

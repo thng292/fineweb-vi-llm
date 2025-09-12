@@ -11,6 +11,7 @@ from accelerate import init_empty_weights, init_on_device, PartialState
 from transformers import Trainer, TrainingArguments, PreTrainedTokenizerBase
 from dion import Dion, DionMixedPrecisionConfig
 
+app = typer.Typer(pretty_exceptions_show_locals=False)
 partial_state = PartialState()
 
 
@@ -26,11 +27,11 @@ class Log:
 
     @staticmethod
     def init(*to_print):
-        print0("[INIT]", to_print)
+        print0("[INIT]", *to_print)
 
     @staticmethod
     def done(*to_print):
-        print0("[DONE]", to_print)
+        print0("[DONE]", *to_print)
 
 
 @dataclass
@@ -41,8 +42,7 @@ class PadTokenizedDataCollator:
     def __call__(
         self, features: list[dict[str, Any]], return_tensors=None
     ) -> dict[str, Any]:
-        first = features[0]
-        pad_lens = [self.sequence_len - len(f["input_ids"]) for f in features]
+        pad_lens = [(self.sequence_len - len(f["input_ids"])) for f in features]
         batch = {}
         batch["input_ids"] = torch.tensor(
             [
@@ -63,6 +63,7 @@ class PadTokenizedDataCollator:
         return batch
 
 
+@app.command()
 def main(
     # Train config
     run_name: str,
@@ -74,6 +75,7 @@ def main(
     eval_batch_size_per_device: int = 1,
     gradient_accumulation: int = 1,
     epochs: float = 1,
+    train_cpu: bool = False,
     train_bfloat16: bool = False,
     train_float16: bool = False,
     learning_rate: float = 0.01,
@@ -90,7 +92,7 @@ def main(
     num_key_value_heads: int = 1,
     head_dim: int = 256,
     hidden_activation: str = "swish",
-    max_position_embeddings=4096,
+    max_position_embeddings: int = 4096,
     tie_word_embeddings: bool = True,
     query_pre_attn_scalar: int = 256,
     sliding_window: int = 512,
@@ -129,30 +131,33 @@ def main(
         use_cache=False,
     )
     Log.init("Init model")
-    with init_on_device(partial_state.device):
+    with init_on_device("cpu" if train_cpu else partial_state.device):
         #     with init_empty_weights():
         model = FinewebViForCausalLM(config)
     Log.done("Init model")
     num_params = sum(p.numel() for p in model.parameters())
     Log.stat("Num params", num_params)
-    optimizer_param_groups = [
-        dict(params=list(model.model.layers.parameters())),
-        dict(
-            params=list(model.get_input_embeddings().parameters()),
-            algorithm="lion",
-            lr=learning_rate,  # no LR adjustment for embedding parameters
-            betas=(0.95, 0.98),
-            weight_decay=0,  # no weight decay for embedding parameters
-        ),
-        dict(
-            params=list(model.lm_heads.parameters()),
-            algorithm="lion",
-            lr=learning_rate
-            / math.sqrt(model.config.hidden_size),  # scale LR for lm_head
-            betas=(0.95, 0.98),
-            weight_decay=0,  # no weight decay for lm_head parameters
-        ),
-    ]
+
+    optimizer_param_groups = (
+        [  # some parameters appear in more than one parameter group
+            dict(params=list(model.model.layers.parameters())),
+            dict(
+                params=list(model.get_input_embeddings().parameters()),
+                algorithm="lion",
+                lr=learning_rate,  # no LR adjustment for embedding parameters
+                betas=(0.95, 0.98),
+                weight_decay=0,  # no weight decay for embedding parameters
+            ),
+            dict(
+                params=list(model.lm_heads.parameters()),
+                algorithm="lion",
+                lr=learning_rate
+                / math.sqrt(model.config.hidden_size),  # scale LR for lm_head
+                betas=(0.95, 0.98),
+                weight_decay=0,  # no weight decay for lm_head parameters
+            ),
+        ]
+    )
     optimizer_args = dict(
         params=optimizer_param_groups,
         rank_fraction=dion_rank_frac,
@@ -202,6 +207,7 @@ def main(
             logging_steps=1,
             bf16=train_bfloat16,
             fp16=train_float16,
+            use_cpu=train_cpu,
             push_to_hub=push_to_hub,
             hub_model_id=hub_model_id,
             hub_private_repo=hub_private,
@@ -216,4 +222,5 @@ def main(
 
 
 if __name__ == "__main__":
-    typer.run(main)
+    # typer.run(main)
+    app()
