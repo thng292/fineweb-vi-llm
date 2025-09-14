@@ -196,7 +196,7 @@ def main(
     if test_model_id:
         model = AutoModelForCausalLM.from_pretrained(
             test_model_id,
-            device_map={"": "cpu" if train_cpu else partial_state.device},
+            # device_map={"": "cpu" if train_cpu else partial_state.device},
         )
     else:
         with init_on_device("cpu" if train_cpu else partial_state.device):
