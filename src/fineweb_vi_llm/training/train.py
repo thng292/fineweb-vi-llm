@@ -196,7 +196,10 @@ def main(
     with init_on_device("cpu" if train_cpu else partial_state.device):
         #     with init_empty_weights():
         if test_model_id:
-            model = AutoModelForCausalLM.from_pretrained(test_model_id)
+            model = AutoModelForCausalLM.from_pretrained(
+                test_model_id,
+                device_map={"": "cpu" if train_cpu else partial_state.device},
+            )
         else:
             model = FinewebViForCausalLM(config)
 
