@@ -547,9 +547,9 @@ def shift_and_fill(x, shift=-1, fill_value=-100, dim=-1):
 
 
 class FinewebViForCausalLM(FinewebViPretrainedModel, GenerationMixin):
-    _tied_weights_keys = ["lm_heads[0].weight"]
+    # _tied_weights_keys = ["lm_heads[0].weight"]
     _tp_plan = {"lm_head": "colwise_rep"}
-    _pp_plan = {"lm_head": (["hidden_states"], ["logits"])}
+    # _pp_plan = {"lm_head": (["hidden_states"], ["logits"])}
     config: FinewebViConfig
     base_model_prefix = "language_model"
 

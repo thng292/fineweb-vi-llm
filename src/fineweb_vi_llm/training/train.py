@@ -97,7 +97,10 @@ class PadTokenizedDataCollator:
             dtype=torch.long,
         )
         batch["attention_masks"] = torch.tensor(
-            [f["input_ids"] + [0] * pad_len for pad_len, f in zip(pad_lens, features)],
+            [
+                f["attention_masks"] + [0] * pad_len
+                for pad_len, f in zip(pad_lens, features)
+            ],
         )
         return batch
 
