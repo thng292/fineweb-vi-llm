@@ -41,14 +41,14 @@ def construct_optimizer_param_group(
     res = [  # some parameters appear in more than one parameter group
         dict(params=[]),  # 2D params
         dict(
-            params=list(model.get_input_embeddings().parameters()),
+            params=list(p.data for p in model.get_input_embeddings().parameters()),
             algorithm="lion",
             lr=learning_rate,  # no LR adjustment for embedding parameters
             betas=(0.95, 0.98),
             weight_decay=0,  # no weight decay for embedding parameters
         ),
         dict(
-            params=list(model.lm_heads.parameters()),
+            params=list(p.data for p in model.lm_heads.parameters()),
             algorithm="lion",
             lr=learning_rate
             / math.sqrt(model.config.hidden_size),  # scale LR for lm_head
@@ -67,10 +67,9 @@ def construct_optimizer_param_group(
             continue
 
         if param.ndim == 2:
-            res[0]["params"].append(param)
+            res[0]["params"].append(param.data)
         else:
-            res[3]["params"].append(param)
-
+            res[3]["params"].append(param.data)
     return res
 
 
