@@ -9,7 +9,14 @@ import datasets
 from typing import Any
 from dataclasses import dataclass
 from accelerate import init_empty_weights, init_on_device, PartialState
-from transformers import Trainer, TrainingArguments, PreTrainedTokenizerBase
+from transformers import (
+    Trainer,
+    TrainingArguments,
+    PreTrainedTokenizerBase,
+    PreTrainedModel,
+    AutoModelForCausalLM,
+    AutoTokenizer,
+)
 from dion import Dion, DionMixedPrecisionConfig
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
@@ -36,7 +43,7 @@ class Log:
 
 
 def construct_optimizer_param_group(
-    model: FinewebViForCausalLM, learning_rate: float
+    model: PreTrainedModel, learning_rate: float
 ) -> list[list[nn.Parameter]]:
     res = [  # some parameters appear in more than one parameter group
         dict(params=[]),  # 2D params
@@ -48,7 +55,12 @@ def construct_optimizer_param_group(
             weight_decay=0,  # no weight decay for embedding parameters
         ),
         dict(
-            params=list(p.data for p in model.lm_heads.parameters()),
+            params=list(
+                p.data
+                for p in (
+                    model.lm_heads if hasattr(model, "lm_heads") else model.lm_head
+                ).parameters()
+            ),
             algorithm="lion",
             lr=learning_rate
             / math.sqrt(model.config.hidden_size),  # scale LR for lm_head
@@ -142,6 +154,7 @@ def main(
     sliding_window_pattern: int = 6,
     num_lm_head: int = 3,
     tokenizer_uri: str = "thng292/fineweb-vi-en-tokenizer",
+    test_model_id: str = "",
 ):
     Log.stat("Run", run_name)
     Log.stat("Checkpoint dir", checkpoint_dir)
@@ -154,9 +167,12 @@ def main(
     Log.stat(f"Gradient accumulation steps: {gradient_accumulation}")
     Log.stat("=" * 80)
 
-    tokenizer: PreTrainedTokenizerBase = FinewebViTokenizer.from_pretrained(
-        tokenizer_uri
-    )
+    if test_model_id:
+        tokenizer = AutoTokenizer.from_pretrained(test_model_id)
+    else:
+        tokenizer: PreTrainedTokenizerBase = FinewebViTokenizer.from_pretrained(
+            tokenizer_uri
+        )
     config = FinewebViConfig(
         hidden_size=hidden_size,
         intermediate_size=intermediate_size,
@@ -179,7 +195,11 @@ def main(
     Log.init("Init model")
     with init_on_device("cpu" if train_cpu else partial_state.device):
         #     with init_empty_weights():
-        model = FinewebViForCausalLM(config)
+        if test_model_id:
+            model = AutoModelForCausalLM.from_pretrained(test_model_id)
+        else:
+            model = FinewebViForCausalLM(config)
+
     Log.done("Init model")
     num_params = sum(p.numel() for p in model.parameters())
     Log.stat("Num params", num_params)
