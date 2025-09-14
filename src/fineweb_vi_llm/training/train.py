@@ -70,7 +70,6 @@ def construct_optimizer_param_group(
             res[0]["params"].append(param.data)
         else:
             res[3]["params"].append(param.data)
-    exit(0)
     return res
 
 
