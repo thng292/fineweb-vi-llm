@@ -70,6 +70,7 @@ def construct_optimizer_param_group(
             res[0]["params"].append(param.data)
         else:
             res[3]["params"].append(param.data)
+    exit(0)
     return res
 
 
@@ -120,6 +121,7 @@ def main(
     learning_rate: float = 0.01,
     dion_rank_frac: float = 1,  # 1 is full, 0.5 is half, ...
     neftune_noise_alpha: float = 5,
+    max_grad_norm: float = 0.5,
     push_to_hub: bool = True,
     hub_model_id: str = "FineWebVi",
     hub_private: bool = True,
@@ -227,6 +229,7 @@ def main(
             learning_rate=learning_rate,
             num_train_epochs=epochs,
             neftune_noise_alpha=neftune_noise_alpha,
+            max_grad_norm=max_grad_norm,
             logging_steps=1,
             bf16=train_bfloat16,
             fp16=train_float16,
