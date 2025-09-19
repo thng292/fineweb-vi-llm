@@ -128,6 +128,7 @@ def main(
     eval_step: float = 0.1,
     batch_size_per_device: int = 1,
     eval_batch_size_per_device: int = 1,
+    eval_on_start: bool = True,
     gradient_accumulation: int = 1,
     epochs: float = 1,
     train_cpu: bool = False,
