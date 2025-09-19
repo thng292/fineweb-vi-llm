@@ -3,9 +3,9 @@ UV_ENV_FILE=.env uv run accelerate launch --multi_gpu -m fineweb_vi_llm.training
     --checkpoint-dir outputs/training-251109 \
     --checkpoint-step 0.1 \
     --eval-step 0.1 \
-    --batch-size-per-device 8 \
+    --batch-size-per-device 1 \
     --gradient-accumulation 1 \
-    --eval-batch-size-per-device 8 \
+    --eval-batch-size-per-device 1 \
     --epochs 0.05 \
     --learning-rate 1e-5 \
-    --train-cpu
+    --train-float16

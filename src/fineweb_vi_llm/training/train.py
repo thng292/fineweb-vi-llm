@@ -8,7 +8,7 @@ from torch import nn
 import datasets
 from typing import Any
 from dataclasses import dataclass
-from accelerate import init_empty_weights, init_on_device, PartialState
+from accelerate import init_on_device, PartialState
 from transformers import (
     Trainer,
     TrainingArguments,
@@ -121,7 +121,7 @@ class PadTokenizedDataCollator:
 def main(
     # Train config
     run_name: str,
-    tokenized_data_uri: str = "",
+    tokenized_data_uri: str = None,
     checkpoint_dir: str = "checkpoints",
     checkpoint_step: float = 0.1,
     eval_step: float = 0.1,
@@ -134,7 +134,7 @@ def main(
     train_float16: bool = False,
     learning_rate: float = 0.01,
     dion_rank_frac: float = 1,  # 1 is full, 0.5 is half, ...
-    neftune_noise_alpha: float = 5,
+    neftune_noise_alpha: float = None,
     max_grad_norm: float = 0.5,
     push_to_hub: bool = True,
     hub_model_id: str = "FineWebVi",
@@ -154,7 +154,7 @@ def main(
     sliding_window_pattern: int = 6,
     num_lm_head: int = 3,
     tokenizer_uri: str = "thng292/fineweb-vi-en-tokenizer",
-    test_model_id: str = "",
+    test_model_id: str = None,
 ):
     Log.stat("Run", run_name)
     Log.stat("Checkpoint dir", checkpoint_dir)
@@ -225,9 +225,7 @@ def main(
         ),
     )
 
-    data = datasets.load_dataset(
-        tokenized_data_uri,
-    )
+    data = datasets.load_dataset(tokenized_data_uri)
     assert isinstance(data, datasets.DatasetDict)
 
     trainer = Trainer(
@@ -235,12 +233,14 @@ def main(
         data_collator=PadTokenizedDataCollator(tokenizer, max_position_embeddings),
         train_dataset=data["train"],
         eval_dataset=data["test"],
-        optimizer_cls_and_kwargs=(
-            Dion,
-            optimizer_args,
-        ),
+        # optimizer_cls_and_kwargs=(
+        #     Dion,
+        #     optimizer_args,
+        # ),
         processing_class=tokenizer,
         args=TrainingArguments(
+            optim="adamw_torch_fused",
+            debug="underflow_overflow",
             run_name=run_name,
             output_dir=checkpoint_dir,
             # overwrite_output_dir=True,
@@ -248,6 +248,7 @@ def main(
             per_device_eval_batch_size=eval_batch_size_per_device,
             gradient_accumulation_steps=gradient_accumulation,
             gradient_checkpointing=True,
+            eval_on_start=True,
             eval_strategy="steps",
             eval_steps=eval_step,
             save_steps=checkpoint_step,
