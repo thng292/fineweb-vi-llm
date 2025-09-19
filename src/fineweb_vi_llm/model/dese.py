@@ -680,18 +680,18 @@ class FinewebViForCausalLM(FinewebViPretrainedModel, GenerationMixin):
             attentions=outputs.attentions,
         )
 
-    def init_weights(self):
-        self.apply(self._init_weights)
+    # def init_weights(self):
+    #     self.apply(self._init_weights)
 
-    def _init_weights(self, module):
-        if isinstance(module, nn.Linear):
-            # https://arxiv.org/pdf/2310.17813
-            fan_out = module.weight.size(0)
-            fan_in = module.weight.size(1)
-            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
-            torch.nn.init.normal_(module.weight, mean=0.0, std=std)
-            if module.bias is not None:
-                torch.nn.init.zeros_(module.bias)
+    # def _init_weights(self, module):
+    #     if isinstance(module, nn.Linear):
+    #         # https://arxiv.org/pdf/2310.17813
+    #         fan_out = module.weight.size(0)
+    #         fan_in = module.weight.size(1)
+    #         std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+    #         torch.nn.init.normal_(module.weight, mean=0.0, std=std)
+    #         if module.bias is not None:
+    #             torch.nn.init.zeros_(module.bias)
 
-        elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=1.0)
+    #     elif isinstance(module, nn.Embedding):
+    #         torch.nn.init.normal_(module.weight, mean=0.0, std=1.0)
