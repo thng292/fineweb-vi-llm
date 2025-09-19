@@ -121,6 +121,7 @@ class PadTokenizedDataCollator:
 def main(
     # Train config
     run_name: str,
+    debug: bool = False,
     tokenized_data_uri: str = None,
     checkpoint_dir: str = "checkpoints",
     checkpoint_step: float = 0.1,
@@ -135,6 +136,7 @@ def main(
     learning_rate: float = 0.01,
     dion_rank_frac: float = 1,  # 1 is full, 0.5 is half, ...
     neftune_noise_alpha: float = None,
+    use_adamw: bool = False,
     max_grad_norm: float = 0.5,
     push_to_hub: bool = True,
     hub_model_id: str = "FineWebVi",
@@ -233,14 +235,18 @@ def main(
         data_collator=PadTokenizedDataCollator(tokenizer, max_position_embeddings),
         train_dataset=data["train"],
         eval_dataset=data["test"],
-        # optimizer_cls_and_kwargs=(
-        #     Dion,
-        #     optimizer_args,
-        # ),
+        optimizer_cls_and_kwargs=(
+            (
+                Dion,
+                optimizer_args,
+            )
+            if not use_adamw
+            else None
+        ),
         processing_class=tokenizer,
         args=TrainingArguments(
             optim="adamw_torch_fused",
-            debug="underflow_overflow",
+            debug="underflow_overflow" if debug else "",
             run_name=run_name,
             output_dir=checkpoint_dir,
             # overwrite_output_dir=True,
