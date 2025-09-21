@@ -210,26 +210,33 @@ def main(
     num_params = sum(p.numel() for p in model.parameters())
     Log.stat("Num params", num_params)
 
-    optimizer_param_groups = construct_optimizer_param_group(model, learning_rate)
-    optimizer_args = dict(
-        params=optimizer_param_groups,
-        rank_fraction=dion_rank_frac,
-        lr=learning_rate,
-        mu=0.95,
-        weight_decay=0,
-        mixed_precision_config=(
-            DionMixedPrecisionConfig(
-                momentum_dtype=torch.bfloat16 if train_bfloat16 else torch.float16,
-                variance_dtype=torch.bfloat16 if train_bfloat16 else torch.float16,
-                Q_dtype=torch.bfloat16 if train_bfloat16 else torch.float16,
-            )
-            if train_bfloat16 or train_float16
-            else None
-        ),
-    )
+    if not use_adamw:
+        Log.init("Construct optimizer param group")
+        optimizer_param_groups = construct_optimizer_param_group(model, learning_rate)
+        Log.done("Construct optimizer param group")
+        optimizer_args = dict(
+            params=optimizer_param_groups,
+            rank_fraction=dion_rank_frac,
+            lr=learning_rate,
+            mu=0.95,
+            weight_decay=0,
+            mixed_precision_config=(
+                DionMixedPrecisionConfig(
+                    momentum_dtype=torch.bfloat16 if train_bfloat16 else torch.float16,
+                    variance_dtype=torch.bfloat16 if train_bfloat16 else torch.float16,
+                    Q_dtype=torch.bfloat16 if train_bfloat16 else torch.float16,
+                )
+                if train_bfloat16 or train_float16
+                else None
+            ),
+        )
+    else:
+        optimizer_args = {}
 
+    Log.init("Loading dataset")
     data = datasets.load_dataset(tokenized_data_uri)
     assert isinstance(data, datasets.DatasetDict)
+    Log.done("Loading dataset")
 
     trainer = Trainer(
         model=model,
@@ -255,7 +262,7 @@ def main(
             per_device_eval_batch_size=eval_batch_size_per_device,
             gradient_accumulation_steps=gradient_accumulation,
             gradient_checkpointing=True,
-            eval_on_start=not debug,
+            eval_on_start=eval_on_start,
             eval_strategy="steps",
             eval_steps=eval_step,
             save_steps=checkpoint_step,
