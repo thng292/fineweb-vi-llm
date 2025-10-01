@@ -143,22 +143,23 @@ def main(
     hub_model_id: str = "FineWebVi",
     hub_private: bool = True,
     # Model config
-    hidden_size: int = 960,
-    intermediate_size: int = 1920,
-    num_hidden_layers: int = 18,
+    hidden_size: int = 512,
+    intermediate_size: int = 1024,
+    num_hidden_layers: int = 12,
     num_attention_heads: int = 4,
     num_key_value_heads: int = 1,
     head_dim: int = 256,
     hidden_activation: str = "swish",
-    max_position_embeddings: int = 4096,
+    max_position_embeddings: int = 2048,
     tie_word_embeddings: bool = True,
     query_pre_attn_scalar: int = 256,
-    sliding_window: int = 512,
-    sliding_window_pattern: int = 6,
+    sliding_window: int = 256,
+    sliding_window_pattern: int = 4,
     num_lm_head: int = 3,
     tokenizer_uri: str = "thng292/fineweb-vi-en-tokenizer",
     test_model_id: str = None,
 ):
+    torch.seed()
     Log.stat("Run", run_name)
     Log.stat("Checkpoint dir", checkpoint_dir)
     Log.stat("Num Epochs", epochs)

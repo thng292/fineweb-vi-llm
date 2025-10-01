@@ -9,7 +9,7 @@ UV_ENV_FILE=.env CUDA_VISIBLE_DEVICES=0 uv run accelerate launch --multi_gpu -m 
     --eval-batch-size-per-device 1 \
     --epochs 0.01 \
     --learning-rate 1e-5 \
-    --train-float16 \
+    # --train-float16 \
     --debug \
     --use-adamw \
     --no-eval-on-start 

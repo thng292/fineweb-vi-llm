@@ -260,7 +260,13 @@ class Attention(nn.Module):
                 key_states, value_states, self.layer_idx, cache_kwargs
             )
 
-        attention_interface = eager_attention_forward
+        if self.sliding_window:
+            attention_interface = eager_attention_forward
+        else:
+            attention_interface = ALL_ATTENTION_FUNCTIONS[
+                # self.config._attn_implementation
+                "sdpa"
+            ]
         # if self.config._attn_implementation != "eager":
         #     attention_interface = ALL_ATTENTION_FUNCTIONS[
         #         self.config._attn_implementation

@@ -1,0 +1,42 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Module",
+            "type": "debugpy",
+            "request": "launch",
+            "justMyCode": false,
+            "envFile": "${workspaceFolder}/.env",
+            "module": "fineweb_vi_llm.training.train",
+            "args": [
+                "outputs/date-251109",
+                "--tokenized-data-uri",
+                "thng292/fw-experiment-1-tokenized-packed",
+                "--checkpoint-dir",
+                "training-251109",
+                "--checkpoint-step",
+                "0.1",
+                "--eval-step",
+                "0.1",
+                "--batch-size-per-device",
+                "1",
+                "--gradient-accumulation",
+                "1",
+                "--eval-batch-size-per-device",
+                "1",
+                "--epochs",
+                "0.01",
+                "--learning-rate",
+                "1e-5",
+                "--no-push-to-hub",
+                "--train-float16",
+                "--debug",
+                "--use-adamw",
+                "--no-eval-on-start",
+            ]
+        }
+    ]
+}
