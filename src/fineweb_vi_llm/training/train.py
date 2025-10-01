@@ -93,26 +93,20 @@ class PadTokenizedDataCollator:
     def __call__(
         self, features: list[dict[str, Any]], return_tensors=None
     ) -> dict[str, Any]:
-        pad_lens = [(self.sequence_len - len(f["input_ids"])) for f in features]
+        pad_lens = [(self.sequence_len - len(f["input_ids"]), f) for f in features]
         batch = {}
         batch["input_ids"] = torch.tensor(
             [
-                f["input_ids"] + [self.tokenizer.pad_token_id] * pad_len
-                for pad_len, f in zip(pad_lens, features)
+                (f["input_ids"] + [self.tokenizer.pad_token_id] * pad_len)
+                for pad_len, f in pad_lens
             ],
         )
         batch["labels"] = torch.tensor(
-            [
-                f["input_ids"] + [-100] * pad_len
-                for pad_len, f in zip(pad_lens, features)
-            ],
+            [(f["input_ids"] + [-100] * pad_len) for pad_len, f in pad_lens],
             dtype=torch.long,
         )
         batch["attention_mask"] = torch.tensor(
-            [
-                f["attention_mask"] + [0] * pad_len
-                for pad_len, f in zip(pad_lens, features)
-            ],
+            [(f["attention_mask"] + [0] * pad_len) for pad_len, f in pad_lens],
         )
         return batch
 
